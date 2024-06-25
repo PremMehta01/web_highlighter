@@ -1,0 +1,28 @@
+{
+    "manifest_version": 3,
+    "name": "SELF Web Highlighter",
+    "version": "1.0",
+    "description": "SELF Highlight text on any website.",
+    "permissions": [
+      "activeTab"
+    ],
+    "background": {
+      "service_worker": "background.js"
+    },
+    "content_scripts": [
+      {
+        "matches": ["<all_urls>"],
+        "js": ["jquery-3.7.1.min.js", "content.js"]
+      }
+    ],
+    "web_accessible_resources": [
+        {
+        "resources": ["assets/marker-icon.png"],
+        "matches": ["<all_urls>"]
+        }
+    ],
+    "icons": {
+      "48": "assets/marker-icon.png"
+    }
+  }
+  
