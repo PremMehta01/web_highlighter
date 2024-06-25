@@ -542,6 +542,23 @@
 
 
 // **************************************** 5 ******************************************* //
+// 4 + (4 issue fixed)
+
+
+
+
+// Function to inject the external script
+function injectScript(file) {
+    const script = document.createElement('script');
+    script.src = chrome.runtime.getURL(file);
+    document.head.appendChild(script);
+    console.log('injected', file);
+}
+
+// Inject the script after the content has loaded
+window.onload = function() {
+    injectScript('inject.js');
+};
 
 $(document).ready(function() {
     let imageUrl = '';
@@ -555,46 +572,127 @@ $(document).ready(function() {
 
     function wrapSelectedText(range) {
         const HIGHLIGHT_CLASS = 'highlight';
-        const color = 'yellow';
 
-        function createHighlightSpan() {
-            const highlightSpan = document.createElement('span');
-            highlightSpan.className = HIGHLIGHT_CLASS;
-            highlightSpan.style.backgroundColor = color;
-            return highlightSpan;
-        }
+        function recursiveWrapper(container, highlightInfo, startFound, charsHighlighted) {
+            const { anchor, focus, anchorOffset, focusOffset, color, selectionString } = highlightInfo;
+            const selectionLength = selectionString.length;
 
-        function wrapTextNode(node, start, end) {
-            const highlightSpan = createHighlightSpan();
-            const highlightedText = node.splitText(start);
-            highlightedText.splitText(end - start);
-            highlightSpan.appendChild(highlightedText.cloneNode(true));
-            highlightedText.replaceWith(highlightSpan);
-        }
+            container.contents().each((index, element) => {
+                if (charsHighlighted >= selectionLength) return; // Stop if done highlighting
 
-        if (range.startContainer === range.endContainer && range.startContainer.nodeType === Node.TEXT_NODE) {
-            wrapTextNode(range.startContainer, range.startOffset, range.endOffset);
-        } else {
-            const fragment = range.cloneContents();
-            const walker = document.createTreeWalker(fragment, NodeFilter.SHOW_TEXT, null, false);
+                if (element.nodeType !== Node.TEXT_NODE) {
+                    const jqElement = $(element);
+                    if (jqElement.is(':visible') && getComputedStyle(element).visibility !== 'hidden') {
+                        [startFound, charsHighlighted] = recursiveWrapper(jqElement, highlightInfo, startFound, charsHighlighted);
+                    }
+                    return;
+                }
 
-            let node;
-            const nodesToHighlight = [];
-            while (node = walker.nextNode()) {
-                nodesToHighlight.push(node);
-            }
+                let startIndex = 0;
+                if (!startFound) {
+                    if (!anchor.is(element) && !focus.is(element)) return;
 
-            nodesToHighlight.forEach((node, index) => {
-                const start = index === 0 ? range.startOffset : 0;
-                const end = index === nodesToHighlight.length - 1 ? range.endOffset : node.nodeValue.length;
-                wrapTextNode(node, start, end);
+                    startFound = true;
+                    startIndex = Math.min(...[
+                        ...(anchor.is(element) ? [anchorOffset] : []),
+                        ...(focus.is(element) ? [focusOffset] : []),
+                    ]);
+                }
+
+                const nodeValue = element.nodeValue;
+                if (startIndex > nodeValue.length) {
+                    throw new Error(`No match found for highlight string '${selectionString}'`);
+                }
+
+                const highlightTextEl = element.splitText(startIndex);
+                let i = startIndex;
+                for (; i < nodeValue.length; i++) {
+                    while (charsHighlighted < selectionLength && selectionString[charsHighlighted].match(/\s/u)) charsHighlighted++;
+                    if (charsHighlighted >= selectionLength) break;
+
+                    const char = nodeValue[i];
+                    if (char === selectionString[charsHighlighted]) {
+                        charsHighlighted++;
+                    } else if (!char.match(/\s/u)) {
+                        throw new Error(`No match found for highlight string '${selectionString}'`);
+                    }
+                }
+
+                if (element.parentElement.classList.contains(HIGHLIGHT_CLASS)) return;
+
+                const elementCharCount = i - startIndex;
+                const insertBeforeElement = highlightTextEl.splitText(elementCharCount);
+                const highlightText = highlightTextEl.nodeValue;
+
+                if (highlightText.match(/^\s*$/u)) {
+                    element.parentElement.normalize();
+                    return;
+                }
+
+                const highlightNode = document.createElement('self-web-highlight');
+                highlightNode.classList.add(HIGHLIGHT_CLASS);
+                highlightNode.style.backgroundColor = highlightInfo.color;
+                highlightNode.textContent = highlightTextEl.nodeValue;
+
+
+                highlightTextEl.remove();
+                element.parentElement.insertBefore(highlightNode, insertBeforeElement);
             });
 
-            range.deleteContents();
-            range.insertNode(fragment);
+            return [startFound, charsHighlighted];
+        }
+
+        const highlightInfo = {
+            color: "yellow",
+            selectionString: range.toString(),
+            anchor: $(range.startContainer),
+            anchorOffset: range.startOffset,
+            focus: $(range.endContainer),
+            focusOffset: range.endOffset,
+        };
+
+        const commonAncestorContainer = $(range.commonAncestorContainer);
+        const singleElement = highlightInfo.anchor.is(highlightInfo.focus) && highlightInfo.anchor[0].nodeType === Node.TEXT_NODE;
+
+        try {
+            if (singleElement) {
+                // Handle the case where the selection is within a single text node
+                const textNode = highlightInfo.anchor[0];
+                const beforeText = textNode.textContent.substring(0, highlightInfo.anchorOffset);
+                const selectedText = textNode.textContent.substring(highlightInfo.anchorOffset, highlightInfo.focusOffset);
+                const afterText = textNode.textContent.substring(highlightInfo.focusOffset);
+
+                
+
+                // class WebHighlight extends HTMLElement {}
+                // customElements.define('web-highlight', WebHighlight);
+
+                const highlightSpan = document.createElement('self-web-highlight');
+
+                highlightSpan.className = HIGHLIGHT_CLASS;
+                highlightSpan.style.backgroundColor = highlightInfo.color;
+                highlightSpan.textContent = selectedText;
+
+                // highlightSpan.style.fontWeight = highlightInfo.fontWeight;
+                // highlightSpan.style.fontStyle = highlightInfo.fontStyle;
+                // highlightSpan.style.lineHeight = highlightInfo.lineHeight;
+                // highlightSpan.style.cursor = 'pointer !important';
+
+                const newNode = document.createDocumentFragment();
+                newNode.append(beforeText, highlightSpan, afterText);
+
+                textNode.replaceWith(newNode);
+            } else {
+                // Handle the case where the selection spans multiple nodes
+                recursiveWrapper(commonAncestorContainer, highlightInfo, false, 0);
+            }
+        } catch (e) {
+            console.error('Error highlighting text:', e);
+            return false;
         }
 
         window.getSelection().removeAllRanges();
+        return true;
     }
 
     $(document).on('mouseup', function(event) {
@@ -644,13 +742,9 @@ $(document).ready(function() {
     });
 
     $(document).on('mouseenter', '.highlight', function() {
-        console.log('vHovering over highlight');
+        console.log('mbgvHovering over highlight');
     }).on('mouseleave', '.highlight', function() {
         console.log('No longer hovering over highlight');
     });
 });
-
-
-
-
-
+  

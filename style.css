@@ -1,0 +1,10 @@
+
+self-web-highlight.highlight {
+    font-weight: inherit !important;
+    font-style: inherit !important;
+    line-height: inherit !important;
+    cursor: pointer !important;
+    border-radius: 2px;
+    visibility: visible !important;
+}
+  
