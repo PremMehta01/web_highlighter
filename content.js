@@ -543,22 +543,29 @@
 
 // **************************************** 5 ******************************************* //
 // 4 + (4 issue fixed)
+// Hover to show color, click color to highlight text with the clicked color
 
 
 
 
-// Function to inject the external script
 function injectScript(file) {
     const script = document.createElement('script');
     script.src = chrome.runtime.getURL(file);
-    document.head.appendChild(script);
-    console.log('injected', file);
+    (document.head || document.documentElement).appendChild(script);
+    script.onload = function() {
+        script.remove();
+    };
 }
 
-// Inject the script after the content has loaded
 window.onload = function() {
     injectScript('inject.js');
 };
+
+
+
+const HIGHLIGHT_CLASS = 'highlight';
+const DEFAULT_HIGHLIGHT_COLOR = 'yellow';
+
 
 $(document).ready(function() {
     let imageUrl = '';
@@ -570,8 +577,7 @@ $(document).ready(function() {
 
     let selectedRange;
 
-    function wrapSelectedText(range) {
-        const HIGHLIGHT_CLASS = 'highlight';
+    function wrapSelectedText(range, color) {
 
         function recursiveWrapper(container, highlightInfo, startFound, charsHighlighted) {
             const { anchor, focus, anchorOffset, focusOffset, color, selectionString } = highlightInfo;
@@ -643,7 +649,7 @@ $(document).ready(function() {
         }
 
         const highlightInfo = {
-            color: "yellow",
+            color: color || DEFAULT_HIGHLIGHT_COLOR,
             selectionString: range.toString(),
             anchor: $(range.startContainer),
             anchorOffset: range.startOffset,
@@ -700,14 +706,14 @@ $(document).ready(function() {
         if (selectedText.length > 0) {
             selectedRange = window.getSelection().getRangeAt(0);
             let rect = selectedRange.getBoundingClientRect();
-
+    
             $('#marker-icon').remove();
-
+    
             if (!imageUrl) {
                 console.error('Image URL not available');
                 return;
             }
-
+    
             let markerIcon = $('<img>', {
                 id: 'marker-icon',
                 src: imageUrl,
@@ -721,10 +727,66 @@ $(document).ready(function() {
                     zIndex: 1000
                 }
             });
-
+    
             $('body').append(markerIcon);
+    
+            let popUpToolBox;
+            let hideToolBoxTimeout;
+    
+            markerIcon.hover(
+                function() {
+                    // Mouse enter action for markerIcon
+                    if (!popUpToolBox) {
+                        popUpToolBox = document.createElement('self-webhighlight-popup-toolbox');
+                        document.body.appendChild(popUpToolBox);
+    
+                        // Add hover listeners to the popUpToolBox after it's created and appended
+                        $(popUpToolBox).hover(
+                            function() {
+                                // Mouse enter action for popUpToolBox
+                                clearTimeout(hideToolBoxTimeout); // Clear hide timeout when hovering on toolbox
+                            },
+                            function() {
+                                // Mouse leave action for popUpToolBox
+                                hideToolBoxTimeout = setTimeout(() => {
+                                    if (popUpToolBox) {
+                                        popUpToolBox.style.display = 'none';
+                                    }
+                                }, 30);
+                            }
+                        );
+
+                        $(popUpToolBox).on('color-tile-click', function(event) {
+                            const color = event.detail.color;
+                            wrapSelectedText(selectedRange, color);
+                            popUpToolBox.style.display = 'none';
+                            $('#marker-icon').remove();
+                            console.log('removed marker icon');
+                        });
+                    }
+                    
+                    // Position the pop-up toolbox near the hovered element
+                    const rect = this.getBoundingClientRect();
+                    popUpToolBox.style.position = 'absolute';
+                    popUpToolBox.style.top = `${rect.top + window.scrollY + rect.height}px`;
+                    popUpToolBox.style.left = `${rect.left + window.scrollX}px`;
+                    popUpToolBox.style.display = 'block';
+    
+                    clearTimeout(hideToolBoxTimeout); // Clear any existing hide timeout
+                }, 
+                function() {
+                    // Mouse leave action for markerIcon
+                    hideToolBoxTimeout = setTimeout(() => {
+                        if (popUpToolBox) {
+                            popUpToolBox.style.display = 'none';
+                        }
+                    }, 30); 
+                }
+            );
         }
     });
+    
+    
 
     $(document).on('mousedown', function(event) {
         if (!$(event.target).is('#marker-icon')) {
@@ -732,7 +794,7 @@ $(document).ready(function() {
         } else {
             if (selectedRange) {
                 try {
-                    wrapSelectedText(selectedRange);
+                    wrapSelectedText(selectedRange, DEFAULT_HIGHLIGHT_COLOR);
                 } catch (error) {
                     console.error('Error highlighting text:', error);
                 }
@@ -741,10 +803,17 @@ $(document).ready(function() {
         }
     });
 
+
+
     $(document).on('mouseenter', '.highlight', function() {
-        console.log('mbgvHovering over highlight');
+        console.log('vbxsdfHovering over highlight');
     }).on('mouseleave', '.highlight', function() {
         console.log('No longer hovering over highlight');
     });
+    
+    
+    
 });
+
+
   
