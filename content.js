@@ -548,6 +548,7 @@
 
 
 
+
 function injectScript(file) {
     const script = document.createElement('script');
     script.src = chrome.runtime.getURL(file);
@@ -562,9 +563,82 @@ window.onload = function() {
 };
 
 
-
+const extensionURL = chrome.runtime.getURL('');
 const HIGHLIGHT_CLASS = 'highlight';
+const TEXT_HIGHLIGHT_ID = 'text-highlight-id';
 const DEFAULT_HIGHLIGHT_COLOR = 'yellow';
+
+const highlightedClickPopUpTemplate = `
+  <style>
+    .webhighlight-highlighted-navbar {
+      display: flex;
+      background-color: #2b2b2b;
+      padding: 10px;
+      border-radius: 8px;
+    }
+
+    .webhighlight-highlighted-nav-item {
+      margin: 0 8px;
+      display: flex;
+      width: 20px;
+      height: 20px;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .webhighlight-highlighted-nav-item img {
+      width: 24px;
+      height: 24px;
+    }
+
+    .webhighlight-click-highlighted-color {
+      width: 24px;
+      height: 24px;
+      border-radius: 4px;
+    }
+  </style>
+  
+  <div class="webhighlight-highlighted-navbar">
+    <div class="webhighlight-highlighted-nav-item" id="webhighlight-nav-item-highlighted-color-container"><div class="webhighlight-click-highlighted-color" id="webhighlight-nav-item-highlighted-color"></div></div>
+    <div class="webhighlight-highlighted-nav-item" id="webhighlight-nav-item-copy"><img src="${extensionURL}assets/copy_white.png" alt="Copy"></div>
+    <div class="webhighlight-highlighted-nav-item" id="webhighlight-nav-item-quote"><img src="${extensionURL}assets/quote_white.png" alt="Quote"></div>
+    <div class="webhighlight-highlighted-nav-item" id="webhighlight-nav-item-delete"><img src="${extensionURL}assets/delete_white.png" alt="Delete"></div>
+  </div>
+`;
+
+
+function isVisible(element) {
+    return element.offsetWidth > 0 || element.offsetHeight > 0;
+}
+
+function generateUUID() {
+    const array = new Uint8Array(16);
+    window.crypto.getRandomValues(array);
+
+    return [
+        array[0].toString(16).padStart(2, '0') +
+        array[1].toString(16).padStart(2, '0') +
+        array[2].toString(16).padStart(2, '0') +
+        array[3].toString(16).padStart(2, '0'),
+
+        array[4].toString(16).padStart(2, '0') +
+        array[5].toString(16).padStart(2, '0'),
+
+        array[6].toString(16).padStart(2, '0') +
+        array[7].toString(16).padStart(2, '0'),
+
+        array[8].toString(16).padStart(2, '0') +
+        array[9].toString(16).padStart(2, '0'),
+
+        array[10].toString(16).padStart(2, '0') +
+        array[11].toString(16).padStart(2, '0') +
+        array[12].toString(16).padStart(2, '0') +
+        array[13].toString(16).padStart(2, '0') +
+        array[14].toString(16).padStart(2, '0') +
+        array[15].toString(16).padStart(2, '0')
+    ].join('-');
+}
+
 
 
 $(document).ready(function() {
@@ -579,7 +653,7 @@ $(document).ready(function() {
 
     function wrapSelectedText(range, color) {
 
-        function recursiveWrapper(container, highlightInfo, startFound, charsHighlighted) {
+        function recursiveWrapper(container, highlightInfo, startFound, charsHighlighted, textHighlightId) {
             const { anchor, focus, anchorOffset, focusOffset, color, selectionString } = highlightInfo;
             const selectionLength = selectionString.length;
 
@@ -589,7 +663,7 @@ $(document).ready(function() {
                 if (element.nodeType !== Node.TEXT_NODE) {
                     const jqElement = $(element);
                     if (jqElement.is(':visible') && getComputedStyle(element).visibility !== 'hidden') {
-                        [startFound, charsHighlighted] = recursiveWrapper(jqElement, highlightInfo, startFound, charsHighlighted);
+                        [startFound, charsHighlighted] = recursiveWrapper(jqElement, highlightInfo, startFound, charsHighlighted, textHighlightId);
                     }
                     return;
                 }
@@ -637,6 +711,7 @@ $(document).ready(function() {
 
                 const highlightNode = document.createElement('self-web-highlight');
                 highlightNode.classList.add(HIGHLIGHT_CLASS);
+                highlightNode.setAttribute(TEXT_HIGHLIGHT_ID, textHighlightId);
                 highlightNode.style.backgroundColor = highlightInfo.color;
                 highlightNode.textContent = highlightTextEl.nodeValue;
 
@@ -661,6 +736,7 @@ $(document).ready(function() {
         const singleElement = highlightInfo.anchor.is(highlightInfo.focus) && highlightInfo.anchor[0].nodeType === Node.TEXT_NODE;
 
         try {
+            let textHighlightId = generateUUID();
             if (singleElement) {
                 // Handle the case where the selection is within a single text node
                 const textNode = highlightInfo.anchor[0];
@@ -668,21 +744,12 @@ $(document).ready(function() {
                 const selectedText = textNode.textContent.substring(highlightInfo.anchorOffset, highlightInfo.focusOffset);
                 const afterText = textNode.textContent.substring(highlightInfo.focusOffset);
 
-                
-
-                // class WebHighlight extends HTMLElement {}
-                // customElements.define('web-highlight', WebHighlight);
-
                 const highlightSpan = document.createElement('self-web-highlight');
 
                 highlightSpan.className = HIGHLIGHT_CLASS;
+                highlightSpan.setAttribute(TEXT_HIGHLIGHT_ID, textHighlightId);
                 highlightSpan.style.backgroundColor = highlightInfo.color;
                 highlightSpan.textContent = selectedText;
-
-                // highlightSpan.style.fontWeight = highlightInfo.fontWeight;
-                // highlightSpan.style.fontStyle = highlightInfo.fontStyle;
-                // highlightSpan.style.lineHeight = highlightInfo.lineHeight;
-                // highlightSpan.style.cursor = 'pointer !important';
 
                 const newNode = document.createDocumentFragment();
                 newNode.append(beforeText, highlightSpan, afterText);
@@ -690,7 +757,7 @@ $(document).ready(function() {
                 textNode.replaceWith(newNode);
             } else {
                 // Handle the case where the selection spans multiple nodes
-                recursiveWrapper(commonAncestorContainer, highlightInfo, false, 0);
+                recursiveWrapper(commonAncestorContainer, highlightInfo, false, 0, textHighlightId);
             }
         } catch (e) {
             console.error('Error highlighting text:', e);
@@ -730,7 +797,7 @@ $(document).ready(function() {
     
             $('body').append(markerIcon);
     
-            let popUpToolBox;
+            let popUpToolBox = document.querySelector('self-webhighlight-popup-toolbox');;
             let hideToolBoxTimeout;
     
             markerIcon.hover(
@@ -739,6 +806,7 @@ $(document).ready(function() {
                     if (!popUpToolBox) {
                         popUpToolBox = document.createElement('self-webhighlight-popup-toolbox');
                         document.body.appendChild(popUpToolBox);
+                    }
     
                         // Add hover listeners to the popUpToolBox after it's created and appended
                         $(popUpToolBox).hover(
@@ -759,11 +827,12 @@ $(document).ready(function() {
                         $(popUpToolBox).on('color-tile-click', function(event) {
                             const color = event.detail.color;
                             wrapSelectedText(selectedRange, color);
+
                             popUpToolBox.style.display = 'none';
                             $('#marker-icon').remove();
                             console.log('removed marker icon');
                         });
-                    }
+                    // }
                     
                     // Position the pop-up toolbox near the hovered element
                     const rect = this.getBoundingClientRect();
@@ -789,9 +858,14 @@ $(document).ready(function() {
     
 
     $(document).on('mousedown', function(event) {
-        if (!$(event.target).is('#marker-icon')) {
-            $('#marker-icon').remove();
-        } else {
+        const highlightedClickPopUp = document.querySelector('self-webhighlight-highlighted-click-popup');
+        const markerIconClickPopUp = document.querySelector('self-webhighlight-popup-toolbox');
+        
+        if (highlightedClickPopUp && !highlightedClickPopUp.contains(event.target) && !event.target.classList.contains('highlight')) {
+            highlightedClickPopUp.remove();
+        }
+        
+        if ($(event.target).is('#marker-icon')) {
             if (selectedRange) {
                 try {
                     wrapSelectedText(selectedRange, DEFAULT_HIGHLIGHT_COLOR);
@@ -799,21 +873,185 @@ $(document).ready(function() {
                     console.error('Error highlighting text:', error);
                 }
                 $('#marker-icon').remove();
+                if(markerIconClickPopUp) {
+                    console.log('removing marker icon popup');
+                    markerIconClickPopUp.remove();
+                }
+            }
+        }else if (!$(event.target).is('self-webhighlight-popup-toolbox')) {
+            $('#marker-icon').remove();
+            if(markerIconClickPopUp) {
+                console.log('removing marker icon popup');
+                markerIconClickPopUp.remove();
             }
         }
     });
 
 
 
-    $(document).on('mouseenter', '.highlight', function() {
-        console.log('vbxsdfHovering over highlight');
-    }).on('mouseleave', '.highlight', function() {
-        console.log('No longer hovering over highlight');
+    // $(document).on('mouseenter', '.highlight', function() {
+    //     console.log('vbxsdfHovering over highlight');
+    // }).on('mouseleave', '.highlight', function() {
+    //     console.log('No longer hovering over highlight');
+    // });
+
+
+
+    // $(document).on('click', '.highlight', function() {
+    //     console.log('Clicked on highlight:', $(this).text());
+
+    //     let highlightedClickPopUpToolBox = document.querySelector('self-webhighlight-highlighted-click-popup');
+
+    //     if (highlightedClickPopUpToolBox  && isVisible(highlightedClickPopUpToolBox)) { 
+    //         highlightedClickPopUpToolBox.remove();
+    //     } else {
+    //         if (!highlightedClickPopUpToolBox) {
+    //             highlightedClickPopUpToolBox = document.createElement('self-webhighlight-highlighted-click-popup');
+    //             document.body.appendChild(highlightedClickPopUpToolBox);
+    //             highlightedClickPopUpToolBox.attachShadow({ mode: 'open' }).innerHTML = highlightedClickPopUpTemplate;
+    //         }
+
+
+    //         const rect = this.getBoundingClientRect();
+    //         highlightedClickPopUpToolBox.style.position = 'absolute';
+    //         highlightedClickPopUpToolBox.style.top = `${rect.top + window.scrollY + rect.height}px`;
+    //         highlightedClickPopUpToolBox.style.left = `${rect.left + window.scrollX}px`;
+    //         highlightedClickPopUpToolBox.style.display = 'block';
+    //     }
+
+
+        
+    // });
+
+    $(document).on('click', '.highlight', function() {
+        console.log('Clicked on highlight:', $(this).text());
+    
+        let highlightedClickPopUpToolBox = document.querySelector('self-webhighlight-highlighted-click-popup');
+    
+        if (highlightedClickPopUpToolBox && isVisible(highlightedClickPopUpToolBox)) {
+            highlightedClickPopUpToolBox.remove();
+        } else {
+            
+            if (!highlightedClickPopUpToolBox) {
+                highlightedClickPopUpToolBox = document.createElement('self-webhighlight-highlighted-click-popup');
+                document.body.appendChild(highlightedClickPopUpToolBox);
+                highlightedClickPopUpToolBox.attachShadow({ mode: 'open' }).innerHTML = highlightedClickPopUpTemplate;
+            }
+
+            const rect = this.getBoundingClientRect();
+            highlightedClickPopUpToolBox.style.position = 'absolute';
+            highlightedClickPopUpToolBox.style.top = `${rect.top + window.scrollY + rect.height}px`;
+            highlightedClickPopUpToolBox.style.left = `${rect.left + window.scrollX}px`;
+            highlightedClickPopUpToolBox.style.display = 'block';
+
+            const backgroundColor = window.getComputedStyle(this).backgroundColor || DEFAULT_HIGHLIGHT_COLOR;
+            const colorDiv = highlightedClickPopUpToolBox.shadowRoot.querySelector('#webhighlight-nav-item-highlighted-color');
+            if (colorDiv) {
+                colorDiv.style.backgroundColor = backgroundColor;
+            }
+
+            let currentTextHighlightId;
+            const selfWebHighlightElement = this.closest('self-web-highlight');
+            if (selfWebHighlightElement) {
+                currentTextHighlightId = selfWebHighlightElement.getAttribute('text-highlight-id');
+                console.log('Text Highlight ID:', currentTextHighlightId);
+            } else {
+                console.log('No self-web-highlight element found');
+            }
+
+
+            // Add event listener for button clicks
+            const buttons = highlightedClickPopUpToolBox.shadowRoot.querySelectorAll('.webhighlight-highlighted-nav-item');
+            buttons.forEach(button => {
+                button.addEventListener('click', (event) => {
+                    const buttonId = event.currentTarget.id;
+    
+                    // Dispatch custom event with button id
+                    highlightedClickPopUpToolBox.dispatchEvent(new CustomEvent('webhighlight-highlighted-nav-item-click', {
+                        detail: { buttonId, currentTextHighlightId },
+                        bubbles: true,
+                        composed: true
+                    }));
+                });
+            });
+        }
     });
+
+
+    document.addEventListener('webhighlight-highlighted-nav-item-click', (event) => {
+        let buttonId = event.detail.buttonId;
+        let currentTextHighlightId = event.detail.currentTextHighlightId;
+        switch(buttonId) {
+            case 'webhighlight-nav-item-highlighted-color-container':
+                console.log('Highlighted color button clicked');
+                break;
+            case 'webhighlight-nav-item-copy':
+                console.log('Text Highlight ID:', currentTextHighlightId);
+                
+                const textElements = document.querySelectorAll('self-web-highlight[text-highlight-id="' + currentTextHighlightId + '"]');
+                let text = '';
+                let prevTopLevelParent = null;
+                let prevElement = null;
+                const blockLevelElements = ['p', 'div', 'article', 'section', 'blockquote', 'header', 'footer', 'aside', 'main', 'nav', 'figure'];
+                const listItemTag = 'li';
+
+                let count = 1;
+
+                textElements.forEach(element => {
+                    console.log(count + ': Each textElement:', element.textContent);
+                    // Find the closest top-level block-level parent element
+                    let topLevelParent = blockLevelElements.map(tag => element.closest(tag)).filter(el => el !== null)[0];
+                    let isListItem = element.closest(listItemTag);
+                    
+                    console.log(count + ": Prev top level parent:", prevTopLevelParent);
+                    console.log(count + ": Curr top level parent:", topLevelParent);
+                    
+                    // Add newline if we moved to a new paragraph
+                    if (prevTopLevelParent && topLevelParent !== prevTopLevelParent) {
+                        console.log(count + ": Adding double newline");
+                        text += '\n';
+                        text += '\n';
+                    }
+
+                    if (prevElement && isListItem && prevElement.closest(listItemTag) !== isListItem) {
+                        text += '\n';
+                    }
+
+                    console.log(count + ": prevElement: " + prevElement);
+                    if (prevElement) {
+                        let sibling = prevElement.nextSibling;
+                        while (sibling && sibling !== element) {
+                            if (sibling.nodeName === 'BR') {
+                                console.log(count + ": Adding newline at sibling BR");
+                                text += '\n';
+                            }
+                            sibling = sibling.nextSibling;
+                        }
+                    }
     
+                    // Append the text content of the current element
+                    text += element.textContent;
     
+                    prevTopLevelParent = topLevelParent;
+                    prevElement = element;
+
+                    count = count + 1;
+                });
+
+                navigator.clipboard.writeText(text);
+                break;
+            case 'webhighlight-nav-item-quote':
+                console.log('Quote button clicked');
+                break;
+            case 'webhighlight-nav-item-delete':
+                console.log('Delete button clicked');
+                break;
+            default:
+                console.log('Unknown button clicked');
+        }
+    });
     
 });
 
 
-  
+

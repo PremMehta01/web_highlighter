@@ -18,7 +18,7 @@
     ],
     "web_accessible_resources": [
         {
-        "resources": ["inject.js", "assets/marker-icon.png"],
+        "resources": ["inject.js", "assets/*"],
         "matches": ["<all_urls>"]
         }
     ],
