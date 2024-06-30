@@ -1,4 +1,149 @@
+// function restoreHighlights() {
+//     console.log('Restoring highlights...');
+
+//     const url = window.location.href;
+
+//     chrome.storage.local.get({ [HIGHLIGHT_METADATA]: {} }, (result) => {
+//         const highlights = result[HIGHLIGHT_METADATA][url];
+
+//         if (!highlights) return;
+
+//         highlights.forEach(highlight => {
+//             const selection = {
+//                 anchorNode: elementFromQuery(highlight.anchorNode),
+//                 anchorOffset: highlight.anchorOffset,
+//                 focusNode: elementFromQuery(highlight.focusNode),
+//                 focusOffset: highlight.focusOffset,
+//             };
+
+//             const container = elementFromQuery(highlight.container);
+
+//             if (!selection.anchorNode || !selection.focusNode || !container) {
+//                 console.error('Could not restore highlight:', highlight);
+//                 return;
+//             }
+
+//             highlightText(container, selection, highlight.highlightedColor, highlight.textHighlightId);
+//         });
+//     });
+// }
+
+// function elementFromQuery(storedQuery) {
+//     const re = />textNode:nth-of-type\(([0-9]+)\)$/ui;
+//     const result = re.exec(storedQuery);
+
+//     if (result) {
+//         const textNodeIndex = parseInt(result[1], 10);
+//         storedQuery = storedQuery.replace(re, "");
+//         const parent = document.querySelector(storedQuery);
+
+//         if (!parent) return null;
+
+//         return parent.childNodes[textNodeIndex];
+//     }
+
+//     return document.querySelector(storedQuery);
+// }
+
+// function highlightText(container, selection, color, textHighlightId) {
+//     const range = document.createRange();
+//     range.setStart(selection.anchorNode, selection.anchorOffset);
+//     range.setEnd(selection.focusNode, selection.focusOffset);
+    
+//     const selectionString = range.toString();
+
+//     recursiveWrapper(container, {
+//         color: color || DEFAULT_HIGHLIGHT_COLOR,
+//         selectionString: selectionString,
+//         anchorNode: selection.anchorNode,
+//         anchorOffset: selection.anchorOffset,
+//         focusNode: selection.focusNode,
+//         focusOffset: selection.focusOffset,
+//         href: window.location.href,
+//         // createdAt: new Date().toISOString(),
+//     }, false, 0, textHighlightId);
+// }
+
+
+
+const HIGHLIGHT_METADATA = 'highlightMetadata';
+
+
+function restoreHighlights() {
+    console.log('Restoring highlights...');
+
+    const url = window.location.href;
+
+    chrome.storage.local.get({ [HIGHLIGHT_METADATA]: {} }, (result) => {
+        const highlights = result[HIGHLIGHT_METADATA][url];
+
+        if (!highlights) return;
+
+        highlights.forEach(highlight => {
+            const selection = {
+                anchorNode: elementFromQuery(highlight.anchorNode),
+                anchorOffset: highlight.anchorOffset,
+                focusNode: elementFromQuery(highlight.focusNode),
+                focusOffset: highlight.focusOffset,
+            };
+
+            const container = elementFromQuery(highlight.container);
+
+            if (!selection.anchorNode || !selection.focusNode || !container) {
+                console.error('Could not restore highlight:', highlight);
+                return;
+            }
+
+            if (!container.hasChildNodes()) {
+                console.error('Container has no child nodes:', container);
+                return;
+            }
+
+            highlightText(container, selection, highlight.highlightedColor, highlight.textHighlightId);
+        });
+    });
+}
+
+function elementFromQuery(storedQuery) {
+    const re = />textNode:nth-of-type\(([0-9]+)\)$/ui;
+    const result = re.exec(storedQuery);
+
+    if (result) {
+        const textNodeIndex = parseInt(result[1], 10);
+        storedQuery = storedQuery.replace(re, "");
+        const parent = document.querySelector(storedQuery);
+
+        if (!parent) return null;
+
+        return parent.childNodes[textNodeIndex];
+    }
+
+    return document.querySelector(storedQuery);
+}
+
+function highlightText(container, selection, color, textHighlightId) {
+    const range = document.createRange();
+    range.setStart(selection.anchorNode, selection.anchorOffset);
+    range.setEnd(selection.focusNode, selection.focusOffset);
+    
+    const selectionString = range.toString();
+
+    recursiveWrapper(container, {
+        color: color || DEFAULT_HIGHLIGHT_COLOR,
+        selectionString: selectionString,
+        anchorNode: selection.anchorNode,
+        anchorOffset: selection.anchorOffset,
+        focusNode: selection.focusNode,
+        focusOffset: selection.focusOffset,
+        href: window.location.href,
+        createdAt: new Date().toISOString(),
+    }, false, 0, textHighlightId);
+}
+
+
+
 function injectScript(file) {
+    console.log(`Injecting ${file}...`);
     const script = document.createElement('script');
     script.src = chrome.runtime.getURL(file);
     (document.head || document.documentElement).appendChild(script);
@@ -9,13 +154,18 @@ function injectScript(file) {
 
 window.onload = function() {
     injectScript('inject.js');
+    restoreHighlights();
 };
+
+
 
 
 const extensionURL = chrome.runtime.getURL('');
 const HIGHLIGHT_CLASS = 'highlight';
 const TEXT_HIGHLIGHT_ID = 'text-highlight-id';
 const DEFAULT_HIGHLIGHT_COLOR = 'yellow';
+const manifestVersion = chrome.runtime.getManifest().version;
+
 
 const highlightedClickPopUpTemplate = `
   <style>
@@ -89,6 +239,347 @@ function generateUUID() {
 }
 
 
+// function recursiveWrapper(container, highlightInfo, startFound, charsHighlighted, textHighlightId) {
+//     const { anchorNode, focusNode, anchorOffset, focusOffset, selectionString } = highlightInfo;
+//     const selectionLength = selectionString.length;
+
+//     container.childNodes.forEach((element) => {
+//         if (charsHighlighted >= selectionLength) return;
+
+//         if (element.nodeType !== Node.TEXT_NODE) {
+//             if (element.nodeType === Node.ELEMENT_NODE && element.offsetParent !== null) {
+//                 [startFound, charsHighlighted] = recursiveWrapper(element, highlightInfo, startFound, charsHighlighted, textHighlightId);
+//             }
+//             return;
+//         }
+
+//         let startIndex = 0;
+//         if (!startFound) {
+//             if (element !== anchorNode && element !== focusNode) return;
+
+//             startFound = true;
+//             startIndex = Math.min(
+//                 ...(element === anchorNode ? [anchorOffset] : []),
+//                 ...(element === focusNode ? [focusOffset] : [])
+//             );
+//         }
+
+//         const nodeValue = element.nodeValue;
+//         if (startIndex > nodeValue.length) {
+//             throw new Error(`No match found for highlight string '${selectionString}'`);
+//         }
+
+//         const highlightTextEl = element.splitText(startIndex);
+//         let i = startIndex;
+//         for (; i < nodeValue.length; i++) {
+//             while (charsHighlighted < selectionLength && selectionString[charsHighlighted].match(/\s/u)) charsHighlighted++;
+//             if (charsHighlighted >= selectionLength) break;
+
+//             const char = nodeValue[i];
+//             if (char === selectionString[charsHighlighted]) {
+//                 charsHighlighted++;
+//             } else if (!char.match(/\s/u)) {
+//                 throw new Error(`No match found for highlight string '${selectionString}'`);
+//             }
+//         }
+
+//         if (element.parentElement.classList.contains(HIGHLIGHT_CLASS)) return;
+
+//         const elementCharCount = i - startIndex;
+//         const insertBeforeElement = highlightTextEl.splitText(elementCharCount);
+//         const highlightText = highlightTextEl.nodeValue;
+
+//         if (highlightText.match(/^\s*$/u)) {
+//             element.parentElement.normalize();
+//             return;
+//         }
+
+//         const highlightNode = document.createElement('self-web-highlight');
+//         highlightNode.classList.add(HIGHLIGHT_CLASS);
+//         highlightNode.setAttribute(TEXT_HIGHLIGHT_ID, textHighlightId);
+//         highlightNode.style.backgroundColor = highlightInfo.color;
+//         highlightNode.textContent = highlightTextEl.nodeValue;
+
+//         highlightTextEl.remove();
+//         element.parentElement.insertBefore(highlightNode, insertBeforeElement);
+//     });
+
+//     return [startFound, charsHighlighted];
+// }
+
+
+// function recursiveWrapper(container, highlightInfo, startFound, charsHighlighted, textHighlightId) {
+//     const { anchorNode, focusNode, anchorOffset, focusOffset, color, selectionString } = highlightInfo;
+//     const selectionLength = selectionString.length;
+
+//     const $container = $(container);  // Convert container to jQuery object
+
+//     console.log('Container:', $container); // Log container to see if it's correct
+//     console.log('Container contents:', $container.contents());
+
+//     $container.contents().each((index, element) => {
+//         if (charsHighlighted >= selectionLength) return; // Stop if done highlighting
+
+//         if (element.nodeType !== Node.TEXT_NODE) {
+//             const jqElement = $(element);
+//             if (jqElement.is(':visible') && getComputedStyle(element).visibility !== 'hidden') {
+//                 [startFound, charsHighlighted] = recursiveWrapper(jqElement[0], highlightInfo, startFound, charsHighlighted, textHighlightId);
+//             }
+//             return;
+//         }
+
+//         let startIndex = 0;
+//         if (!startFound) {
+//             if (!anchorNode.is(element) && !focusNode.is(element)) return;
+
+//             startFound = true;
+//             startIndex = Math.min(...[
+//                 ...(anchorNode.is(element) ? [anchorOffset] : []),
+//                 ...(focusNode.is(element) ? [focusOffset] : []),
+//             ]);
+//         }
+
+//         const nodeValue = element.nodeValue;
+//         if (startIndex > nodeValue.length) {
+//             throw new Error(`No match found for highlight string '${selectionString}'`);
+//         }
+
+//         const highlightTextEl = element.splitText(startIndex);
+//         let i = startIndex;
+//         for (; i < nodeValue.length; i++) {
+//             while (charsHighlighted < selectionLength && selectionString[charsHighlighted].match(/\s/u)) charsHighlighted++;
+//             if (charsHighlighted >= selectionLength) break;
+
+//             const char = nodeValue[i];
+//             if (char === selectionString[charsHighlighted]) {
+//                 charsHighlighted++;
+//             } else if (!char.match(/\s/u)) {
+//                 throw new Error(`No match found for highlight string '${selectionString}'`);
+//             }
+//         }
+
+//         if (element.parentElement.classList.contains(HIGHLIGHT_CLASS)) return;
+
+//         const elementCharCount = i - startIndex;
+//         const insertBeforeElement = highlightTextEl.splitText(elementCharCount);
+//         const highlightText = highlightTextEl.nodeValue;
+
+//         if (highlightText.match(/^\s*$/u)) {
+//             element.parentElement.normalize();
+//             return;
+//         }
+
+//         const highlightNode = document.createElement('self-web-highlight');
+//         highlightNode.classList.add(HIGHLIGHT_CLASS);
+//         highlightNode.setAttribute(TEXT_HIGHLIGHT_ID, textHighlightId);
+//         highlightNode.style.backgroundColor = highlightInfo.color;
+//         highlightNode.textContent = highlightTextEl.nodeValue;
+
+
+//         highlightTextEl.remove();
+//         element.parentElement.insertBefore(highlightNode, insertBeforeElement);
+//     });
+
+//     return [startFound, charsHighlighted];
+// }
+
+
+function recursiveWrapper(container, highlightInfo, startFound, charsHighlighted, textHighlightId) {
+    const { anchorNode, focusNode, anchorOffset, focusOffset, selectionString } = highlightInfo;
+    const selectionLength = selectionString.length;
+
+    container.childNodes.forEach((element) => {
+        if (charsHighlighted >= selectionLength) return;
+
+        if (element.nodeType !== Node.TEXT_NODE) {
+            if (element.nodeType === Node.ELEMENT_NODE && element.offsetParent !== null) {
+                [startFound, charsHighlighted] = recursiveWrapper(element, highlightInfo, startFound, charsHighlighted, textHighlightId);
+            }
+            return;
+        }
+
+        let startIndex = 0;
+        if (!startFound) {
+            if (element !== anchorNode && element !== focusNode) return;
+
+            startFound = true;
+            startIndex = Math.min(
+                ...(element === anchorNode ? [anchorOffset] : []),
+                ...(element === focusNode ? [focusOffset] : [])
+            );
+        }
+
+        const nodeValue = element.nodeValue;
+        if (startIndex > nodeValue.length) {
+            throw new Error(`No match found for highlight string '${selectionString}'`);
+        }
+
+        const highlightTextEl = element.splitText(startIndex);
+        let i = startIndex;
+        for (; i < nodeValue.length; i++) {
+            while (charsHighlighted < selectionLength && selectionString[charsHighlighted].match(/\s/u)) charsHighlighted++;
+            if (charsHighlighted >= selectionLength) break;
+
+            const char = nodeValue[i];
+            if (char === selectionString[charsHighlighted]) {
+                charsHighlighted++;
+            } else if (!char.match(/\s/u)) {
+                throw new Error(`No match found for highlight string '${selectionString}'`);
+            }
+        }
+
+        if (element.parentElement.classList.contains(HIGHLIGHT_CLASS)) return;
+
+        const elementCharCount = i - startIndex;
+        const insertBeforeElement = highlightTextEl.splitText(elementCharCount);
+        const highlightText = highlightTextEl.nodeValue;
+
+        if (highlightText.match(/^\s*$/u)) {
+            element.parentElement.normalize();
+            return;
+        }
+
+        const highlightNode = document.createElement('self-web-highlight');
+        highlightNode.classList.add(HIGHLIGHT_CLASS);
+        highlightNode.setAttribute(TEXT_HIGHLIGHT_ID, textHighlightId);
+        highlightNode.style.backgroundColor = highlightInfo.color;
+        highlightNode.textContent = highlightTextEl.nodeValue;
+
+        highlightTextEl.remove();
+        element.parentElement.insertBefore(highlightNode, insertBeforeElement);
+    });
+
+    return [startFound, charsHighlighted];
+}
+
+
+function wrapSelectedText(selection, color) {
+
+    const range = selection.getRangeAt(0);
+
+
+    let container = range.commonAncestorContainer;
+    // while (container.nodeType !== Node.ELEMENT_NODE) {
+    //     container = container.parentNode;
+    // }
+
+    while (!container.innerHTML) {
+        container = container.parentNode;
+    }
+
+    const highlightInfo = {
+        color: color || DEFAULT_HIGHLIGHT_COLOR,
+        selectionString: selection.toString(),
+        anchorNode: range.startContainer,
+        anchorOffset: range.startOffset,
+        focusNode: range.endContainer,
+        focusOffset: range.endOffset,
+        href: window.location.href,
+        createdAt: new Date().toISOString(),
+        selectionAnchorNode: getQuery(selection.anchorNode),
+        selectionFocusNode: getQuery(selection.focusNode),
+        container: getQuery(container),
+    };
+
+    const singleElement = highlightInfo.anchorNode === highlightInfo.focusNode && highlightInfo.anchorNode.nodeType === Node.TEXT_NODE;
+
+    try {
+        let textHighlightId = generateUUID();
+        if (singleElement) {
+            const textNode = highlightInfo.anchorNode;
+            const beforeText = textNode.textContent.substring(0, highlightInfo.anchorOffset);
+            const selectedText = textNode.textContent.substring(highlightInfo.anchorOffset, highlightInfo.focusOffset);
+            const afterText = textNode.textContent.substring(highlightInfo.focusOffset);
+
+            const highlightSpan = document.createElement('self-web-highlight');
+            highlightSpan.className = HIGHLIGHT_CLASS;
+            highlightSpan.setAttribute(TEXT_HIGHLIGHT_ID, textHighlightId);
+            highlightSpan.style.backgroundColor = highlightInfo.color;
+            highlightSpan.textContent = selectedText;
+
+            const newNode = document.createDocumentFragment();
+            newNode.append(beforeText, highlightSpan, afterText);
+
+            textNode.replaceWith(newNode);
+        } else {
+            recursiveWrapper(container, highlightInfo, false, 0, textHighlightId);
+        }
+
+        chrome.storage.local.get({ [HIGHLIGHT_METADATA]: {} }, (result) => {
+            const highlights = result[HIGHLIGHT_METADATA];
+            const url = highlightInfo.href;
+
+            if (!highlights[url]) highlights[url] = [];
+
+            console.log("Selection at mid: ", selection);
+
+            // let aNode = getQuery(selection.anchorNode);
+            // console.log("aNode at mid: " + aNode);
+
+            // let fNode = getQuery(selection.focusNode);
+            // console.log("fNode at mid: " + fNode);
+
+
+            highlights[url].push({
+                version: manifestVersion,
+                highlightedString: highlightInfo.selectionString,
+                container: highlightInfo.container,
+                anchorNode: highlightInfo.selectionAnchorNode,
+                // anchorOffset: selection.anchorOffset,
+                anchorOffset: highlightInfo.anchorOffset,
+                focusNode: highlightInfo.selectionFocusNode,
+                focusOffset: highlightInfo.focusOffset,
+                highlightedColor: highlightInfo.color,
+                href: highlightInfo.href,
+                textHighlightId: textHighlightId,
+                createdAt: highlightInfo.createdAt
+            });
+
+            chrome.storage.local.set({ [HIGHLIGHT_METADATA]: highlights });
+
+            console.log('Highlight saved: ' + JSON.stringify(result, null, 2));
+        });
+
+    } catch (e) {
+        console.error('Error highlighting text:', e);
+        return false;
+    }
+
+    window.getSelection().removeAllRanges();
+    return true;
+}
+
+function getQuery(element) {
+    console.log("element: ", element);
+
+    // if (!element) return null;
+
+    // if (element.nodeType === Node.TEXT_NODE) {
+    //     element = element.parentNode;
+    // }
+
+    if (element.id) return `#${escapeCSSString(element.id)}`;
+    if (element.localName === 'html') return 'html';
+
+    const parent = element.parentNode;
+    const parentSelector = getQuery(parent);
+
+    if (!element.localName) {
+        const index = Array.prototype.indexOf.call(parent.childNodes, element);
+        return `${parentSelector}>textNode:nth-of-type(${index})`;
+    } else {
+        const index = Array.from(parent.childNodes).filter((child) => child.localName === element.localName).indexOf(element) + 1;
+        return `${parentSelector}>${element.localName}:nth-of-type(${index})`;
+    }
+}
+
+function escapeCSSString(cssString) {
+    return cssString.replace(/(:)/ug, "\\$1");
+}
+
+
+
+
 
 $(document).ready(function() {
     let imageUrl = '';
@@ -98,129 +589,16 @@ $(document).ready(function() {
         console.error('Error getting image URL:', error);
     }
 
-    let selectedRange;
-
-    function wrapSelectedText(range, color) {
-
-        function recursiveWrapper(container, highlightInfo, startFound, charsHighlighted, textHighlightId) {
-            const { anchor, focus, anchorOffset, focusOffset, color, selectionString } = highlightInfo;
-            const selectionLength = selectionString.length;
-
-            container.contents().each((index, element) => {
-                if (charsHighlighted >= selectionLength) return; // Stop if done highlighting
-
-                if (element.nodeType !== Node.TEXT_NODE) {
-                    const jqElement = $(element);
-                    if (jqElement.is(':visible') && getComputedStyle(element).visibility !== 'hidden') {
-                        [startFound, charsHighlighted] = recursiveWrapper(jqElement, highlightInfo, startFound, charsHighlighted, textHighlightId);
-                    }
-                    return;
-                }
-
-                let startIndex = 0;
-                if (!startFound) {
-                    if (!anchor.is(element) && !focus.is(element)) return;
-
-                    startFound = true;
-                    startIndex = Math.min(...[
-                        ...(anchor.is(element) ? [anchorOffset] : []),
-                        ...(focus.is(element) ? [focusOffset] : []),
-                    ]);
-                }
-
-                const nodeValue = element.nodeValue;
-                if (startIndex > nodeValue.length) {
-                    throw new Error(`No match found for highlight string '${selectionString}'`);
-                }
-
-                const highlightTextEl = element.splitText(startIndex);
-                let i = startIndex;
-                for (; i < nodeValue.length; i++) {
-                    while (charsHighlighted < selectionLength && selectionString[charsHighlighted].match(/\s/u)) charsHighlighted++;
-                    if (charsHighlighted >= selectionLength) break;
-
-                    const char = nodeValue[i];
-                    if (char === selectionString[charsHighlighted]) {
-                        charsHighlighted++;
-                    } else if (!char.match(/\s/u)) {
-                        throw new Error(`No match found for highlight string '${selectionString}'`);
-                    }
-                }
-
-                if (element.parentElement.classList.contains(HIGHLIGHT_CLASS)) return;
-
-                const elementCharCount = i - startIndex;
-                const insertBeforeElement = highlightTextEl.splitText(elementCharCount);
-                const highlightText = highlightTextEl.nodeValue;
-
-                if (highlightText.match(/^\s*$/u)) {
-                    element.parentElement.normalize();
-                    return;
-                }
-
-                const highlightNode = document.createElement('self-web-highlight');
-                highlightNode.classList.add(HIGHLIGHT_CLASS);
-                highlightNode.setAttribute(TEXT_HIGHLIGHT_ID, textHighlightId);
-                highlightNode.style.backgroundColor = highlightInfo.color;
-                highlightNode.textContent = highlightTextEl.nodeValue;
-
-
-                highlightTextEl.remove();
-                element.parentElement.insertBefore(highlightNode, insertBeforeElement);
-            });
-
-            return [startFound, charsHighlighted];
-        }
-
-        const highlightInfo = {
-            color: color || DEFAULT_HIGHLIGHT_COLOR,
-            selectionString: range.toString(),
-            anchor: $(range.startContainer),
-            anchorOffset: range.startOffset,
-            focus: $(range.endContainer),
-            focusOffset: range.endOffset,
-        };
-
-        const commonAncestorContainer = $(range.commonAncestorContainer);
-        const singleElement = highlightInfo.anchor.is(highlightInfo.focus) && highlightInfo.anchor[0].nodeType === Node.TEXT_NODE;
-
-        try {
-            let textHighlightId = generateUUID();
-            if (singleElement) {
-                // Handle the case where the selection is within a single text node
-                const textNode = highlightInfo.anchor[0];
-                const beforeText = textNode.textContent.substring(0, highlightInfo.anchorOffset);
-                const selectedText = textNode.textContent.substring(highlightInfo.anchorOffset, highlightInfo.focusOffset);
-                const afterText = textNode.textContent.substring(highlightInfo.focusOffset);
-
-                const highlightSpan = document.createElement('self-web-highlight');
-
-                highlightSpan.className = HIGHLIGHT_CLASS;
-                highlightSpan.setAttribute(TEXT_HIGHLIGHT_ID, textHighlightId);
-                highlightSpan.style.backgroundColor = highlightInfo.color;
-                highlightSpan.textContent = selectedText;
-
-                const newNode = document.createDocumentFragment();
-                newNode.append(beforeText, highlightSpan, afterText);
-
-                textNode.replaceWith(newNode);
-            } else {
-                // Handle the case where the selection spans multiple nodes
-                recursiveWrapper(commonAncestorContainer, highlightInfo, false, 0, textHighlightId);
-            }
-        } catch (e) {
-            console.error('Error highlighting text:', e);
-            return false;
-        }
-
-        window.getSelection().removeAllRanges();
-        return true;
-    }
+    let selection;
 
     $(document).on('mouseup', function(event) {
-        let selectedText = window.getSelection().toString().trim();
-        if (selectedText.length > 0) {
-            selectedRange = window.getSelection().getRangeAt(0);
+        // let selectedText = window.getSelection().toString().trim();
+        // if (selectedText.length > 0) {
+
+        selection = window.getSelection();
+        
+        if (selection.rangeCount > 0 && selection.toString().trim().length > 0) {
+            let selectedRange = selection.getRangeAt(0);
             let rect = selectedRange.getBoundingClientRect();
     
             $('#marker-icon').remove();
@@ -256,30 +634,35 @@ $(document).ready(function() {
                         document.body.appendChild(popUpToolBox);
                     }
     
-                        $(popUpToolBox).hover(
-                            function() {
-                                // Mouse enter action for popUpToolBox
-                                clearTimeout(hideToolBoxTimeout); // Clear hide timeout when hovering on toolbox
-                            },
-                            function() {
-                                // Mouse leave action for popUpToolBox
-                                hideToolBoxTimeout = setTimeout(() => {
-                                    if (popUpToolBox) {
-                                        popUpToolBox.style.display = 'none';
-                                    }
-                                }, 30);
-                            }
-                        );
+                    $(popUpToolBox).hover(
+                        function() {
+                            // Mouse enter action for popUpToolBox
+                            clearTimeout(hideToolBoxTimeout); // Clear hide timeout when hovering on toolbox
+                        },
+                        function() {
+                            // Mouse leave action for popUpToolBox
+                            hideToolBoxTimeout = setTimeout(() => {
+                                if (popUpToolBox) {
+                                    popUpToolBox.style.display = 'none';
+                                }
+                            }, 30);
+                        }
+                    );
 
-                        $(popUpToolBox).on('color-tile-click', function(event) {
-                            const color = event.detail.color;
-                            wrapSelectedText(selectedRange, color);
+                    $(popUpToolBox).on('color-tile-click', function(event) {
+                        const color = event.detail.color;
+                        console.log("at time of clicking color, selection: ", selection);
+                        console.log("at time of clicking color, selection.rangeCount: ", selection.rangeCount);
+                        if (selection.rangeCount > 0) {
+                            wrapSelectedText(window.getSelection(), color);
 
                             popUpToolBox.style.display = 'none';
                             $('#marker-icon').remove();
                             console.log('removed marker icon');
-                        });
-                    // }
+                        }else {
+                            console.error('No valid selection found');
+                        }
+                    });
                     
                     const rect = this.getBoundingClientRect();
                     popUpToolBox.style.position = 'absolute';
@@ -312,9 +695,9 @@ $(document).ready(function() {
         }
         
         if ($(event.target).is('#marker-icon')) {
-            if (selectedRange) {
+            if (selection) {
                 try {
-                    wrapSelectedText(selectedRange, DEFAULT_HIGHLIGHT_COLOR);
+                    wrapSelectedText(window.getSelection(), DEFAULT_HIGHLIGHT_COLOR);
                 } catch (error) {
                     console.error('Error highlighting text:', error);
                 }
@@ -494,8 +877,34 @@ $(document).ready(function() {
                 console.log('Unknown button clicked');
         }
     });
+
+    // document.addEventListener('DOMContentLoaded', restoreHighlights);
+    
     
 });
+
+
+
+
+
+function clearStorage() {
+    console.log("Clearing Chrome storage...");
+    chrome.storage.local.clear(() => {
+        if (chrome.runtime.lastError) {
+            console.error("Error clearing Chrome storage:", chrome.runtime.lastError);
+        } else {
+            console.log("Chrome storage cleared successfully.");
+        }
+    });
+}
+
+
+// clearStorage();
+
+// MY:  #mw-content-text>div:nth-of-type(1)>p:nth-of-type(2)>b:nth-of-type(1)>textNode:nth-of-type(0)",
+//ORIG: #mw-content-text>div:nth-of-type(1)>p:nth-of-type(2)>b:nth-of-type(1)
+
+
 
 
 
