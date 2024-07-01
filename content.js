@@ -923,11 +923,3 @@ function clearStorage() {
 
 
 // clearStorage();
-
-// MY:  #mw-content-text>div:nth-of-type(1)>p:nth-of-type(2)>b:nth-of-type(1)>textNode:nth-of-type(0)",
-//ORIG: #mw-content-text>div:nth-of-type(1)>p:nth-of-type(2)>b:nth-of-type(1)
-
-
-
-
-
