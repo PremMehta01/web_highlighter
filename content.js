@@ -12,6 +12,7 @@ window.onload = function() {
 };
 
 
+
 const extensionURL = chrome.runtime.getURL('');
 const HIGHLIGHT_CLASS = 'highlight';
 const TEXT_HIGHLIGHT_ID = 'text-highlight-id';
