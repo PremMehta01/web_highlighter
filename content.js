@@ -408,7 +408,9 @@ function recursiveWrapper(container, highlightInfo, startFound, charsHighlighted
     const { anchorNode, focusNode, anchorOffset, focusOffset, selectionString } = highlightInfo;
     const selectionLength = selectionString.length;
 
-    container.childNodes.forEach((element) => {
+    const childNodes = Array.from(container.childNodes);
+
+    childNodes.forEach((element) => {
         if (charsHighlighted >= selectionLength) return;
 
         if (element.nodeType !== Node.TEXT_NODE) {
@@ -921,11 +923,3 @@ function clearStorage() {
 
 
 // clearStorage();
-
-// MY:  #mw-content-text>div:nth-of-type(1)>p:nth-of-type(2)>b:nth-of-type(1)>textNode:nth-of-type(0)",
-//ORIG: #mw-content-text>div:nth-of-type(1)>p:nth-of-type(2)>b:nth-of-type(1)
-
-
-
-
-
