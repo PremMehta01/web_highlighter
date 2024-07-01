@@ -89,8 +89,14 @@ function restoreHighlights() {
 
             const container = elementFromQuery(highlight.container);
 
+            const anchor = selection.anchorNode;
+            const focus = selection.focusNode;
+
+            console.log("anchor: ", anchor, "---------focus: ", focus);
+            console.log("container: ", container);
+
             if (!selection.anchorNode || !selection.focusNode || !container) {
-                console.error('Could not restore highlight:', highlight);
+                console.error('Could not restore highlight:', JSON.stringify(highlight, null, 2));
                 return;
             }
 
@@ -118,7 +124,9 @@ function elementFromQuery(storedQuery) {
         return parent.childNodes[textNodeIndex];
     }
 
-    return document.querySelector(storedQuery);
+    console.log("storedQuery: ", storedQuery);
+    const res = document.querySelector(storedQuery);
+    return res;
 }
 
 function highlightText(container, selection, color, textHighlightId) {
@@ -155,7 +163,18 @@ function injectScript(file) {
 window.onload = function() {
     injectScript('inject.js');
     restoreHighlights();
+    // setTimeout(restoreHighlights, 10000);
 };
+
+// if (document.readyState === 'loading') {
+//     console.log('Page is still loading... removing and then restoring highlights...');
+//     document.removeEventListener('DOMContentLoaded', restoreHighlights()); // Prevent duplicates
+//     document.addEventListener('DOMContentLoaded', restoreHighlights());
+// } else {
+//     console.log('Page is already loaded... restoring highlights...');
+//     // Run immediately if the page is already loaded
+//     restoreHighlights();
+// }
 
 
 
