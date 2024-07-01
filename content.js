@@ -499,3 +499,21 @@ $(document).ready(function() {
 
 
 
+
+
+function clearStorage() {
+    console.log("Clearing Chrome storage...");
+    chrome.storage.local.clear(() => {
+        if (chrome.runtime.lastError) {
+            console.error("Error clearing Chrome storage:", chrome.runtime.lastError);
+        } else {
+            console.log("Chrome storage cleared successfully.");
+        }
+    });
+}
+
+
+
+clearStorage();
+
+
