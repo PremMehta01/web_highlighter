@@ -408,7 +408,9 @@ function recursiveWrapper(container, highlightInfo, startFound, charsHighlighted
     const { anchorNode, focusNode, anchorOffset, focusOffset, selectionString } = highlightInfo;
     const selectionLength = selectionString.length;
 
-    container.childNodes.forEach((element) => {
+    const childNodes = Array.from(container.childNodes);
+
+    childNodes.forEach((element) => {
         if (charsHighlighted >= selectionLength) return;
 
         if (element.nodeType !== Node.TEXT_NODE) {
