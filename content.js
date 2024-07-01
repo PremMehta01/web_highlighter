@@ -160,11 +160,29 @@ function injectScript(file) {
     };
 }
 
+// function observeMutations() {
+//     const observer = new MutationObserver(() => {
+//         console.log('Mutation detected, restoring highlights...');
+//         restoreHighlights();
+//     });
+
+//     observer.observe(document.body, {
+//         childList: true,
+//         subtree: true,
+//     });
+// }
+
+
 window.onload = function() {
     injectScript('inject.js');
-    restoreHighlights();
-    // setTimeout(restoreHighlights, 10000);
+
+    // restoreHighlights();
+    // observeMutations();
+
+    setTimeout(restoreHighlights, 1000);
+    
 };
+
 
 // if (document.readyState === 'loading') {
 //     console.log('Page is still loading... removing and then restoring highlights...');
@@ -899,8 +917,6 @@ $(document).ready(function() {
                 console.log('Unknown button clicked');
         }
     });
-
-    // document.addEventListener('DOMContentLoaded', restoreHighlights);
     
     
 });
