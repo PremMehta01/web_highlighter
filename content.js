@@ -212,6 +212,8 @@ const highlightedClickPopUpTemplate = `
       background-color: #2b2b2b;
       padding: 10px;
       border-radius: 8px;
+      position: relative;
+      z-index: 100;
     }
 
     .webhighlight-highlighted-nav-item {
@@ -221,6 +223,7 @@ const highlightedClickPopUpTemplate = `
       height: 20px;
       justify-content: center;
       align-items: center;
+      cursor: pointer;
     }
 
     .webhighlight-highlighted-nav-item img {
@@ -233,11 +236,37 @@ const highlightedClickPopUpTemplate = `
       height: 24px;
       border-radius: 4px;
     }
+
+    .webhighlight-tooltip {
+        visibility: hidden;
+        background-color: #555;
+        color: #fff;
+        text-align: center;
+        border-radius: 5px;
+        padding: 5px;
+        font-size: 9px;
+        position: absolute;
+        z-index: 1000;
+        bottom: 100%; /* Position the tooltip above the navbar */
+        left: 40%;
+        transform: translateX(-50%);
+        margin-bottom: 5px; /* Add some space between the navbar and tooltip */
+        opacity: 0;
+        transition: opacity 0.3s;
+    }
+
+    .webhighlight-tooltip.show {
+        visibility: visible;
+        opacity: 0.9;
+    }
   </style>
   
   <div class="webhighlight-highlighted-navbar">
     <div class="webhighlight-highlighted-nav-item" id="webhighlight-nav-item-highlighted-color-container"><div class="webhighlight-click-highlighted-color" id="webhighlight-nav-item-highlighted-color"></div></div>
-    <div class="webhighlight-highlighted-nav-item" id="webhighlight-nav-item-copy"><img src="${extensionURL}assets/copy_white.png" alt="Copy"></div>
+    <div class="webhighlight-highlighted-nav-item" id="webhighlight-nav-item-copy">
+        <img src="${extensionURL}assets/copy_white.png" alt="Copy">
+        <div class="webhighlight-tooltip" id="webhighlight-copy-tooltip">Copied!</div>
+    </div>
     <div class="webhighlight-highlighted-nav-item" id="webhighlight-nav-item-quote"><img src="${extensionURL}assets/quote_white.png" alt="Quote"></div>
     <div class="webhighlight-highlighted-nav-item" id="webhighlight-nav-item-delete"><img src="${extensionURL}assets/delete_white.png" alt="Delete"></div>
   </div>
@@ -837,9 +866,10 @@ $(document).ready(function() {
     
                     // Dispatch custom event with button id
                     highlightedClickPopUpToolBox.dispatchEvent(new CustomEvent('webhighlight-highlighted-nav-item-click', {
-                        detail: { buttonId, currentTextHighlightId },
+                        detail: { buttonId, currentTextHighlightId, highlightedClickPopUpToolBox },
                         bubbles: true,
-                        composed: true
+                        composed: true,
+                        highlightedClickPopUpToolBox
                     }));
                 });
             });
@@ -850,12 +880,14 @@ $(document).ready(function() {
     document.addEventListener('webhighlight-highlighted-nav-item-click', (event) => {
         let buttonId = event.detail.buttonId;
         let currentTextHighlightId = event.detail.currentTextHighlightId;
+        let highlightedClickPopUpToolBox = event.detail.highlightedClickPopUpToolBox;
+
         switch(buttonId) {
             case 'webhighlight-nav-item-highlighted-color-container':
                 console.log('Highlighted color button clicked');
                 break;
             case 'webhighlight-nav-item-copy':
-                console.log('Text Highlight ID:', currentTextHighlightId);
+                // console.log('Text Highlight ID:', currentTextHighlightId);
                 
                 const textElements = document.querySelectorAll('self-web-highlight[text-highlight-id="' + currentTextHighlightId + '"]');
                 let text = '';
@@ -866,13 +898,13 @@ $(document).ready(function() {
 
 
                 textElements.forEach(element => {
-                    console.log('Each textElement:', element.textContent);
+                    // console.log('Each textElement:', element.textContent);
 
                     let topLevelParent = blockLevelElements.map(tag => element.closest(tag)).filter(el => el !== null)[0];
                     let isListItem = element.closest(listItemTag);
                     
-                    console.log("Prev top level parent:", prevTopLevelParent);
-                    console.log("Curr top level parent:", topLevelParent);
+                    // console.log("Prev top level parent:", prevTopLevelParent);
+                    // console.log("Curr top level parent:", topLevelParent);
                     
                     // Add newline if we moved to a new paragraph
                     if (prevTopLevelParent && topLevelParent !== prevTopLevelParent) {
@@ -886,7 +918,7 @@ $(document).ready(function() {
                         text += '\n';
                     }
 
-                    console.log("prevElement: " + prevElement);
+                    // console.log("prevElement: " + prevElement);
                     if (prevElement) {
                         let sibling = prevElement.nextSibling;
                         while (sibling && sibling !== element) {
@@ -898,14 +930,28 @@ $(document).ready(function() {
                         }
                     }
     
-                    // Append the text content of the current element
                     text += element.textContent;
     
                     prevTopLevelParent = topLevelParent;
                     prevElement = element;
                 });
 
-                navigator.clipboard.writeText(text);
+
+                navigator.clipboard.writeText(text).then(() => {
+                    const shadowRoot = highlightedClickPopUpToolBox.shadowRoot;
+                    const tooltip = shadowRoot.querySelector('#webhighlight-copy-tooltip');
+
+                    if (tooltip) {
+                        tooltip.classList.add('show');
+    
+                        // Hide the tooltip after 1 seconds
+                        setTimeout(() => {
+                            console.log('Hiding tooltip');
+                            tooltip.classList.remove('show');
+                        }, 1000);
+                    }
+                });
+
                 break;
             case 'webhighlight-nav-item-quote':
                 console.log('Quote button clicked');
