@@ -580,21 +580,11 @@ function wrapSelectedText(selection, color) {
 
             if (!highlights[url]) highlights[url] = [];
 
-            console.log("Selection at mid: ", selection);
-
-            // let aNode = getQuery(selection.anchorNode);
-            // console.log("aNode at mid: " + aNode);
-
-            // let fNode = getQuery(selection.focusNode);
-            // console.log("fNode at mid: " + fNode);
-
-
             highlights[url].push({
                 version: manifestVersion,
                 highlightedString: highlightInfo.selectionString,
                 container: highlightInfo.container,
                 anchorNode: highlightInfo.selectionAnchorNode,
-                // anchorOffset: selection.anchorOffset,
                 anchorOffset: highlightInfo.anchorOffset,
                 focusNode: highlightInfo.selectionFocusNode,
                 focusOffset: highlightInfo.focusOffset,
@@ -889,7 +879,7 @@ $(document).ready(function() {
             case 'webhighlight-nav-item-copy':
                 // console.log('Text Highlight ID:', currentTextHighlightId);
                 
-                const textElements = document.querySelectorAll('self-web-highlight[text-highlight-id="' + currentTextHighlightId + '"]');
+                const textElementsWithCurrentTextHighlightId = document.querySelectorAll('self-web-highlight[text-highlight-id="' + currentTextHighlightId + '"]');
                 let text = '';
                 let prevTopLevelParent = null;
                 let prevElement = null;
@@ -897,8 +887,8 @@ $(document).ready(function() {
                 const listItemTag = 'li';
 
 
-                textElements.forEach(element => {
-                    // console.log('Each textElement:', element.textContent);
+                textElementsWithCurrentTextHighlightId.forEach(element => {
+                    // console.log('Each textElementsWithCurrentTextHighlightId:', element.textContent);
 
                     let topLevelParent = blockLevelElements.map(tag => element.closest(tag)).filter(el => el !== null)[0];
                     let isListItem = element.closest(listItemTag);
@@ -958,6 +948,52 @@ $(document).ready(function() {
                 break;
             case 'webhighlight-nav-item-delete':
                 console.log('Delete button clicked');
+            
+                // Find all elements with the current text highlight ID
+                const highlightedElements = document.querySelectorAll(`self-web-highlight[text-highlight-id="${currentTextHighlightId}"]`);
+            
+                highlightedElements.forEach(element => {
+                    console.log("Deleting text: " + element.textContent);
+                    // Get the parent node
+                    const parent = element.parentNode;
+            
+                    // Create a text node with the highlighted content
+                    const textNode = document.createTextNode(element.textContent);
+            
+                    // Replace the highlighted element with the text node
+                    parent.replaceChild(textNode, element);
+                    parent.normalize();
+                });
+            
+                // Normalize the parent to merge adjacent text nodes
+                // document.body.normalize();
+                
+            
+                // Remove the highlight data from storage
+                chrome.storage.local.get({ [HIGHLIGHT_METADATA]: {} }, (result) => {
+                    const highlights = result[HIGHLIGHT_METADATA];
+                    const url = window.location.href;
+            
+                    if (highlights[url]) {
+                        highlights[url] = highlights[url].filter(highlight => highlight.textHighlightId !== currentTextHighlightId);
+            
+                        // If no highlights left for this URL, remove the URL entry
+                        if (highlights[url].length === 0) {
+                            delete highlights[url];
+                        }
+            
+                        chrome.storage.local.set({ [HIGHLIGHT_METADATA]: highlights }, () => {
+                            console.log('Highlight removed from storage');
+                            logStorage();
+                        });
+                    }
+                });
+            
+                // Hide the popup
+                if (highlightedClickPopUpToolBox) {
+                    highlightedClickPopUpToolBox.style.display = 'none';
+                }
+            
                 break;
             default:
                 console.log('Unknown button clicked');
@@ -969,6 +1005,12 @@ $(document).ready(function() {
 
 
 
+function logStorage() {
+    chrome.storage.local.get({ [HIGHLIGHT_METADATA]: {} }, (result) => {
+        const highlights = result[HIGHLIGHT_METADATA];
+        console.log("Storage: ", JSON.stringify(highlights, null, 2));
+    });
+}
 
 
 function clearStorage() {
