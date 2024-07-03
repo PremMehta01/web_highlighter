@@ -87,13 +87,13 @@ function restoreHighlights() {
             }
     
             const cleanText = getCleanTextContent(container);
-            const startIndex = cleanText.indexOf(highlight.highlightedString);
+            const startIndex = cleanText.indexOf(highlight.highlightedStringInSinglePara);
             if (startIndex === -1) {
                 console.error('Could not find original text in container:', highlight);
                 return;
             }
     
-            const endIndex = startIndex + highlight.highlightedString.length;
+            const endIndex = startIndex + highlight.highlightedStringInSinglePara.length;
     
             // Find the text nodes and offsets for the start and end of the highlight
             const selection = findNodesAndOffsets(container, startIndex, endIndex);
@@ -598,6 +598,7 @@ function wrapSelectedText(selection, color) {
         selectionAnchorNode: getQuery(selection.anchorNode),
         selectionFocusNode: getQuery(selection.focusNode),
         container: getQuery(container),
+        highlightedStringInSinglePara: replaceLineBreaksWithSpaces(selection.toString()),
     };
 
     const singleElement = highlightInfo.anchorNode === highlightInfo.focusNode && highlightInfo.anchorNode.nodeType === Node.TEXT_NODE;
@@ -641,7 +642,8 @@ function wrapSelectedText(selection, color) {
                 highlightedColor: highlightInfo.color,
                 href: highlightInfo.href,
                 textHighlightId: textHighlightId,
-                createdAt: highlightInfo.createdAt
+                createdAt: highlightInfo.createdAt,
+                highlightedStringInSinglePara: highlightInfo.highlightedStringInSinglePara,
             });
 
             chrome.storage.local.set({ [HIGHLIGHT_METADATA]: highlights });
@@ -658,6 +660,11 @@ function wrapSelectedText(selection, color) {
     return true;
 }
 
+function replaceLineBreaksWithSpaces(text) {
+    // return text.replace(/\n/g, ' ');
+    return text.replace(/\s*\n\s*/g, ' ');
+}
+
 
 function getCleanTextContent(node) {
     const clone = node.cloneNode(true);
@@ -665,7 +672,31 @@ function getCleanTextContent(node) {
     highlights.forEach(h => {
         h.replaceWith(h.textContent);
     });
-    return clone.textContent;
+    // return clone.textContent;
+    return getStructuredTextContent(clone);
+}
+
+function getStructuredTextContent(node) {
+    let textContent = '';
+
+    function traverse(node) {
+        if (node.nodeType === Node.TEXT_NODE) {
+            textContent += node.textContent;
+        } else if (node.nodeType === Node.ELEMENT_NODE) {
+            if (node.tagName === 'P') {
+                // Add a space for paragraph breaks
+                if (textContent.length > 0) {
+                    textContent += ' ';
+                }
+                node.childNodes.forEach(traverse);
+            } else {
+                node.childNodes.forEach(traverse);
+            }
+        }
+    }
+
+    traverse(node);
+    return textContent;
 }
 
 
