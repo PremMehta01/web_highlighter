@@ -80,54 +80,104 @@ function restoreHighlights() {
         if (!highlights) return;
 
         highlights.forEach(highlight => {
-            const selection = {
-                anchorNode: elementFromQuery(highlight.anchorNode),
-                anchorOffset: highlight.anchorOffset,
-                focusNode: elementFromQuery(highlight.focusNode),
-                focusOffset: highlight.focusOffset,
-            };
-
             const container = elementFromQuery(highlight.container);
-
-            const anchor = selection.anchorNode;
-            const focus = selection.focusNode;
-
-            console.log("anchor: ", anchor, "---------focus: ", focus);
-            console.log("container: ", container);
-
-            if (!selection.anchorNode || !selection.focusNode || !container) {
-                console.error('Could not restore highlight:', JSON.stringify(highlight, null, 2));
+            if (!container) {
+                console.error('Could not find container for highlight:', highlight);
                 return;
             }
-
-            if (!container.hasChildNodes()) {
-                console.error('Container has no child nodes:', container);
+    
+            const cleanText = getCleanTextContent(container);
+            const startIndex = cleanText.indexOf(highlight.highlightedString);
+            if (startIndex === -1) {
+                console.error('Could not find original text in container:', highlight);
                 return;
             }
-
+    
+            const endIndex = startIndex + highlight.highlightedString.length;
+    
+            // Find the text nodes and offsets for the start and end of the highlight
+            const selection = findNodesAndOffsets(container, startIndex, endIndex);
+            if (!selection) {
+                console.error('Could not determine selection for highlight:', highlight);
+                return;
+            }
+    
             highlightText(container, selection, highlight.highlightedColor, highlight.textHighlightId);
         });
     });
 }
 
+
+function findNodesAndOffsets(container, startIndex, endIndex) {
+    let currentIndex = 0;
+    let startNode, startOffset, endNode, endOffset;
+
+    function traverse(node) {
+        if (node.nodeType === Node.TEXT_NODE) {
+            const nodeLength = node.textContent.length;
+            if (!startNode && currentIndex + nodeLength > startIndex) {
+                startNode = node;
+                startOffset = startIndex - currentIndex;
+            }
+            if (!endNode && currentIndex + nodeLength >= endIndex) {
+                endNode = node;
+                endOffset = endIndex - currentIndex;
+                return true; // Stop traversal
+            }
+            currentIndex += nodeLength;
+        } else {
+            for (const childNode of node.childNodes) {
+                if (traverse(childNode)) return true;
+            }
+        }
+        return false;
+    }
+
+    traverse(container);
+
+    if (startNode && endNode) {
+        return {
+            anchorNode: startNode,
+            anchorOffset: startOffset,
+            focusNode: endNode,
+            focusOffset: endOffset
+        };
+    }
+
+    return null;
+}
+
 function elementFromQuery(storedQuery) {
-    const re = />textNode:nth-of-type\(([0-9]+)\)$/ui;
+    const re = />textNode\(([0-9]+)\)$/ui;
     const result = re.exec(storedQuery);
 
     if (result) {
-        const textNodeIndex = parseInt(result[1], 10);
+        const charOffset = parseInt(result[1], 10);
         storedQuery = storedQuery.replace(re, "");
         const parent = document.querySelector(storedQuery);
 
         if (!parent) return null;
 
-        return parent.childNodes[textNodeIndex];
+        const cleanText = getCleanTextContent(parent);
+        let currentOffset = 0;
+        for (const node of parent.childNodes) {
+            if (node.nodeType === Node.TEXT_NODE) {
+                const nodeLength = node.textContent.length;
+                if (currentOffset <= charOffset && charOffset < currentOffset + nodeLength) {
+                    return node;
+                }
+                currentOffset += nodeLength;
+            } else if (node.classList && node.classList.contains(HIGHLIGHT_CLASS)) {
+                // Skip highlight spans, but add their text content length
+                currentOffset += node.textContent.length;
+            }
+        }
+        return null;
     }
 
-    console.log("storedQuery: ", storedQuery);
-    const res = document.querySelector(storedQuery);
-    return res;
+    return document.querySelector(storedQuery);
 }
+
 
 function highlightText(container, selection, color, textHighlightId) {
     const range = document.createRange();
@@ -608,26 +658,30 @@ function wrapSelectedText(selection, color) {
     return true;
 }
 
+
+function getCleanTextContent(node) {
+    const clone = node.cloneNode(true);
+    const highlights = clone.querySelectorAll(HIGHLIGHT_CLASS);
+    highlights.forEach(h => {
+        h.replaceWith(h.textContent);
+    });
+    return clone.textContent;
+}
+
+
 function getQuery(element) {
-    console.log("element: ", element);
-
-    // if (!element) return null;
-
-    // if (element.nodeType === Node.TEXT_NODE) {
-    //     element = element.parentNode;
-    // }
-
     if (element.id) return `#${escapeCSSString(element.id)}`;
     if (element.localName === 'html') return 'html';
 
     const parent = element.parentNode;
     const parentSelector = getQuery(parent);
 
-    if (!element.localName) {
-        const index = Array.prototype.indexOf.call(parent.childNodes, element);
-        return `${parentSelector}>textNode:nth-of-type(${index})`;
+    if (element.nodeType === Node.TEXT_NODE) {
+        const cleanText = getCleanTextContent(parent);
+        let offset = cleanText.indexOf(element.textContent);
+        return `${parentSelector}>textNode(${offset})`;
     } else {
-        const index = Array.from(parent.childNodes).filter((child) => child.localName === element.localName).indexOf(element) + 1;
+        const index = Array.from(parent.children).filter(child => child.localName === element.localName).indexOf(element) + 1;
         return `${parentSelector}>${element.localName}:nth-of-type(${index})`;
     }
 }
