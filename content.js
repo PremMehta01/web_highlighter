@@ -300,7 +300,7 @@ function debounce(func, wait) {
     };
 }
 
-const debouncedRestoreHighlights = debounce(restoreHighlights, 250);
+const debouncedRestoreHighlights = debounce(restoreHighlights, 500);
 
 
 window.onload = function() {
