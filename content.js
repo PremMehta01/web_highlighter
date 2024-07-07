@@ -1,3 +1,6 @@
+const HIGHLIGHT_METADATA = 'highlightMetadata';
+
+
 // function restoreHighlights() {
 //     console.log('Restoring highlights...');
 
@@ -9,17 +12,25 @@
 //         if (!highlights) return;
 
 //         highlights.forEach(highlight => {
-//             const selection = {
-//                 anchorNode: elementFromQuery(highlight.anchorNode),
-//                 anchorOffset: highlight.anchorOffset,
-//                 focusNode: elementFromQuery(highlight.focusNode),
-//                 focusOffset: highlight.focusOffset,
-//             };
-
 //             const container = elementFromQuery(highlight.container);
+//             if (!container) {
+//                 console.error('Could not find container for highlight:', highlight);
+//                 return;
+//             }
 
-//             if (!selection.anchorNode || !selection.focusNode || !container) {
-//                 console.error('Could not restore highlight:', highlight);
+//             const cleanText = getCleanTextContent(container);
+//             const startIndex = cleanText.indexOf(highlight.highlightedString);
+//             if (startIndex === -1) {
+//                 console.error('Could not find original text in container:', highlight);
+//                 return;
+//             }
+
+//             const endIndex = startIndex + highlight.highlightedString.length;
+
+//             // Find the text nodes and offsets for the start and end of the highlight
+//             const selection = findNodesAndOffsets(container, startIndex, endIndex);
+//             if (!selection) {
+//                 console.error('Could not determine selection for highlight:', highlight);
 //                 return;
 //             }
 
@@ -28,49 +39,11 @@
 //     });
 // }
 
-// function elementFromQuery(storedQuery) {
-//     const re = />textNode:nth-of-type\(([0-9]+)\)$/ui;
-//     const result = re.exec(storedQuery);
-
-//     if (result) {
-//         const textNodeIndex = parseInt(result[1], 10);
-//         storedQuery = storedQuery.replace(re, "");
-//         const parent = document.querySelector(storedQuery);
-
-//         if (!parent) return null;
-
-//         return parent.childNodes[textNodeIndex];
-//     }
-
-//     return document.querySelector(storedQuery);
-// }
-
-// function highlightText(container, selection, color, textHighlightId) {
-//     const range = document.createRange();
-//     range.setStart(selection.anchorNode, selection.anchorOffset);
-//     range.setEnd(selection.focusNode, selection.focusOffset);
-    
-//     const selectionString = range.toString();
-
-//     recursiveWrapper(container, {
-//         color: color || DEFAULT_HIGHLIGHT_COLOR,
-//         selectionString: selectionString,
-//         anchorNode: selection.anchorNode,
-//         anchorOffset: selection.anchorOffset,
-//         focusNode: selection.focusNode,
-//         focusOffset: selection.focusOffset,
-//         href: window.location.href,
-//         // createdAt: new Date().toISOString(),
-//     }, false, 0, textHighlightId);
-// }
-
-
-
-const HIGHLIGHT_METADATA = 'highlightMetadata';
 
 
 function restoreHighlights() {
     console.log('Restoring highlights...');
+    logStorage();
 
     const url = window.location.href;
 
@@ -85,28 +58,83 @@ function restoreHighlights() {
                 console.error('Could not find container for highlight:', highlight);
                 return;
             }
-    
+
+            // Check if this highlight already exists
+            const existingHighlight = container.querySelector(`[${TEXT_HIGHLIGHT_ID}="${highlight.textHighlightId}"]`);
+            if (existingHighlight) {
+                console.log('Highlight already exists:', highlight.textHighlightId);
+                return;
+            }
+
             const cleanText = getCleanTextContent(container);
             const startIndex = cleanText.indexOf(highlight.highlightedString);
+
+            // const startIndex = cleanText.indexOf(strippedHighlightedString);
             if (startIndex === -1) {
                 console.error('Could not find original text in container:', highlight);
                 return;
             }
-    
-            const endIndex = startIndex + highlight.highlightedString.length;
-    
+
+            const strippedHighlightedString = highlight.highlightedString.replace(/\n\n/g, ' ');
+            const endIndex = startIndex + strippedHighlightedString.length;
+
             // Find the text nodes and offsets for the start and end of the highlight
             const selection = findNodesAndOffsets(container, startIndex, endIndex);
             if (!selection) {
                 console.error('Could not determine selection for highlight:', highlight);
                 return;
             }
-    
+
             highlightText(container, selection, highlight.highlightedColor, highlight.textHighlightId);
         });
     });
 }
 
+
+
+
+// function findNodesAndOffsets(container, startIndex, endIndex) {
+//     let currentIndex = 0;
+//     let startNode, startOffset, endNode, endOffset;
+
+//     function traverse(node) {
+//         if (node.nodeType === Node.TEXT_NODE) {
+//             const nodeLength = node.textContent.length;
+//             if (!startNode && currentIndex + nodeLength > startIndex) {
+//                 startNode = node;
+//                 startOffset = startIndex - currentIndex;
+//             }
+//             if (!endNode && currentIndex + nodeLength >= endIndex) {
+//                 endNode = node;
+//                 endOffset = endIndex - currentIndex;
+//                 return true; // Stop traversal
+//             }
+//             currentIndex += nodeLength;
+//         } else if (node.nodeType === Node.ELEMENT_NODE) {
+//             for (const childNode of node.childNodes) {
+//                 if (traverse(childNode)) return true;
+//             }
+//             // Account for spaces or newlines added in getCleanTextContent
+//             if (['P', 'DIV', 'BR'].includes(node.nodeName)) {
+//                 currentIndex += 1; // Adjust based on your specific needs
+//             }
+//         }
+//         return false;
+//     }
+
+//     traverse(container);
+
+//     if (startNode && endNode) {
+//         return {
+//             anchorNode: startNode,
+//             anchorOffset: startOffset,
+//             focusNode: endNode,
+//             focusOffset: endOffset
+//         };
+//     }
+
+//     return null;
+// }
 
 function findNodesAndOffsets(container, startIndex, endIndex) {
     let currentIndex = 0;
@@ -115,7 +143,7 @@ function findNodesAndOffsets(container, startIndex, endIndex) {
     function traverse(node) {
         if (node.nodeType === Node.TEXT_NODE) {
             const nodeLength = node.textContent.length;
-            if (!startNode && currentIndex + nodeLength > startIndex) {
+            if (!startNode && currentIndex + nodeLength >= startIndex) {
                 startNode = node;
                 startOffset = startIndex - currentIndex;
             }
@@ -125,9 +153,13 @@ function findNodesAndOffsets(container, startIndex, endIndex) {
                 return true; // Stop traversal
             }
             currentIndex += nodeLength;
-        } else {
+        } else if (node.nodeType === Node.ELEMENT_NODE) {
             for (const childNode of node.childNodes) {
                 if (traverse(childNode)) return true;
+            }
+            // Account for spaces or newlines added in getCleanTextContent
+            if (['P', 'DIV', 'BR'].includes(node.nodeName)) {
+                currentIndex += 1; // Adjust based on your specific needs
             }
         }
         return false;
@@ -146,6 +178,8 @@ function findNodesAndOffsets(container, startIndex, endIndex) {
 
     return null;
 }
+
+
 
 function elementFromQuery(storedQuery) {
     const re = />textNode\(([0-9]+)\)$/ui;
@@ -210,6 +244,37 @@ function injectScript(file) {
     };
 }
 
+function setupMutationObserver() {
+    const targetNode = document.body;
+    const config = { childList: true, subtree: true };
+
+    const callback = function(mutationsList, observer) {
+        for(let mutation of mutationsList) {
+            if (mutation.type === 'childList') {
+                // Check if any removed nodes contained highlights
+                const removedHighlights = Array.from(mutation.removedNodes).some(node => 
+                    node.nodeType === Node.ELEMENT_NODE && node.querySelector('.highlight')
+                );
+
+                // Check if any added nodes might affect our highlights
+                const addedNodes = Array.from(mutation.addedNodes).some(node => 
+                    node.nodeType === Node.ELEMENT_NODE && 
+                    (node.textContent.includes(HIGHLIGHT_CLASS) || node.innerHTML.includes(HIGHLIGHT_CLASS))
+                );
+
+                if (removedHighlights || addedNodes) {
+                    console.log('Detected changes affecting highlights. Restoring...');
+                    restoreHighlights();
+                    break;  // No need to check further mutations
+                }
+            }
+        }
+    };
+
+    const observer = new MutationObserver(callback);
+    observer.observe(targetNode, config);
+}
+
 // function observeMutations() {
 //     const observer = new MutationObserver(() => {
 //         console.log('Mutation detected, restoring highlights...');
@@ -230,6 +295,7 @@ window.onload = function() {
     // observeMutations();
 
     setTimeout(restoreHighlights, 1000);
+    setupMutationObserver(); // Start observing DOM changes
     
 };
 
@@ -660,13 +726,22 @@ function wrapSelectedText(selection, color) {
 
 
 function getCleanTextContent(node) {
-    const clone = node.cloneNode(true);
-    const highlights = clone.querySelectorAll(HIGHLIGHT_CLASS);
-    highlights.forEach(h => {
-        h.replaceWith(h.textContent);
+    let text = '';
+    node.childNodes.forEach(child => {
+        if (child.nodeType === Node.TEXT_NODE) {
+            text += child.textContent;
+        } else if (child.nodeType === Node.ELEMENT_NODE) {
+            text += getCleanTextContent(child);
+            if (['P', 'DIV'].includes(child.nodeName)) {
+                text += '\n\n'; // Adds newlines for block-level elements.
+            } else if (child.nodeName === 'BR') {
+                text += '\n'; // Adds a single newline for line breaks.
+            }
+        }
     });
-    return clone.textContent;
+    return text;
 }
+
 
 
 function getQuery(element) {
@@ -999,6 +1074,7 @@ $(document).ready(function() {
                 break;
             case 'webhighlight-nav-item-quote':
                 console.log('Quote button clicked');
+                clearStorage();
                 break;
             case 'webhighlight-nav-item-delete':
                 console.log('Delete button clicked');
