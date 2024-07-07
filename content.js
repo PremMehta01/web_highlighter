@@ -67,7 +67,17 @@ function restoreHighlights() {
             }
 
             const cleanText = getCleanTextContent(container);
-            const startIndex = cleanText.indexOf(highlight.highlightedString);
+
+            // remove spaces from cleanText
+            let noSpaceCleanText = cleanText.replace(/\s/g, '');
+            noSpaceCleanText.replace(/\s/g, '');
+
+            let noSpaceAlreadyHighlightedString = highlight.highlightedString.replace(/\s/g, '');
+            noSpaceAlreadyHighlightedString.replace(/\s/g, '');
+
+
+            // const startIndex = cleanText.indexOf(highlight.highlightedString);
+            const startIndex = noSpaceCleanText.indexOf(noSpaceAlreadyHighlightedString);
 
             // const startIndex = cleanText.indexOf(strippedHighlightedString);
             if (startIndex === -1) {
@@ -674,7 +684,7 @@ function wrapSelectedText(selection, color) {
 
     const highlightInfo = {
         color: color || DEFAULT_HIGHLIGHT_COLOR,
-        selectionString: selection.toString(),
+        selectionString: selection.toString().trim(),
         anchorNode: range.startContainer,
         anchorOffset: range.startOffset,
         focusNode: range.endContainer,
