@@ -264,7 +264,7 @@ function setupMutationObserver() {
 
                 if (removedHighlights || addedNodes) {
                     console.log('Detected changes affecting highlights. Restoring...');
-                    restoreHighlights();
+                    debouncedRestoreHighlights();
                     break;  // No need to check further mutations
                 }
             }
@@ -275,17 +275,32 @@ function setupMutationObserver() {
     observer.observe(targetNode, config);
 }
 
-function observeMutations() {
-    const observer = new MutationObserver(() => {
-        console.log('Mutation detected, restoring highlights...');
-        restoreHighlights();
-    });
+// function observeMutations() {
+//     const observer = new MutationObserver(() => {
+//         console.log('Mutation detected, restoring highlights...');
+//         restoreHighlights();
+//     });
 
-    observer.observe(document.body, {
-        childList: true,
-        subtree: true,
-    });
+//     observer.observe(document.body, {
+//         childList: true,
+//         subtree: true,
+//     });
+// }
+
+
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
 }
+
+const debouncedRestoreHighlights = debounce(restoreHighlights, 250);
 
 
 window.onload = function() {
