@@ -296,8 +296,8 @@ window.onload = function() {
     // PROS and CONS of observeMutations():
     // PROS: It works in one edge case- when there is entirely new div or elements inserted or removed, those newly added/removed elements does not contains $HIGHLIGHT_CLASS. In this case observeMutaion did trigger. But setupMutationObserver() will not trigger as inside this funciton, we have a check on $HIGHLIGHT_CLASS contains.
     // CONS: It will be too heavy as it continuoulsy calls restoreHighlights(). And most of the time it is false positive call.
-    // Hence using setupMutationObserver() instead of observeMutations()
-    
+    // Hence using setupMutationObserver() instead of observeMutations(). Also after enablilng this, delete highlights does not remove background color from deleting text in UI, though it removes from chrome storage. From UI it removes after reloading.
+
     // observeMutations();
 
     setupMutationObserver(); // Start observing DOM changes
