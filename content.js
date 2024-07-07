@@ -275,26 +275,31 @@ function setupMutationObserver() {
     observer.observe(targetNode, config);
 }
 
-// function observeMutations() {
-//     const observer = new MutationObserver(() => {
-//         console.log('Mutation detected, restoring highlights...');
-//         restoreHighlights();
-//     });
+function observeMutations() {
+    const observer = new MutationObserver(() => {
+        console.log('Mutation detected, restoring highlights...');
+        restoreHighlights();
+    });
 
-//     observer.observe(document.body, {
-//         childList: true,
-//         subtree: true,
-//     });
-// }
+    observer.observe(document.body, {
+        childList: true,
+        subtree: true,
+    });
+}
 
 
 window.onload = function() {
     injectScript('inject.js');
 
-    // restoreHighlights();
+    setTimeout(restoreHighlights, 1000);
+
+    // PROS and CONS of observeMutations():
+    // PROS: It works in one edge case- when there is entirely new div or elements inserted or removed, those newly added/removed elements does not contains $HIGHLIGHT_CLASS. In this case observeMutaion did trigger. But setupMutationObserver() will not trigger as inside this funciton, we have a check on $HIGHLIGHT_CLASS contains.
+    // CONS: It will be too heavy as it continuoulsy calls restoreHighlights(). And most of the time it is false positive call.
+    // Hence using setupMutationObserver() instead of observeMutations()
+    
     // observeMutations();
 
-    setTimeout(restoreHighlights, 1000);
     setupMutationObserver(); // Start observing DOM changes
     
 };
@@ -987,8 +992,7 @@ $(document).ready(function() {
                     highlightedClickPopUpToolBox.dispatchEvent(new CustomEvent('webhighlight-highlighted-nav-item-click', {
                         detail: { buttonId, currentTextHighlightId, highlightedClickPopUpToolBox },
                         bubbles: true,
-                        composed: true,
-                        highlightedClickPopUpToolBox
+                        composed: true
                     }));
                 });
             });
